@@ -3,7 +3,7 @@
  *       Filename:  Server.cpp
  *    Description:  
  *        Version:  1.0
- *        Created:  2014年07月06日 10时50分21秒
+ *        Created:  2014年07月14日 19时59分01秒
  *       Revision:  none
  *       Compiler:  g++
  *         Author:  chzwei, chzwei3@gmail.com
@@ -12,74 +12,88 @@
  */
 #include <stdio.h>
 #include <iostream>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <signal.h>
-#include "Config.h"
-#include "Server.h"
-#include "Epoll.h"
+#include "Lightlib.h"
 using namespace std;
 
-Server::Server(){
-	shutdown = false;
-	handle_sig_alarm = false;
-	handle_sig_hup = false;
-}
+static bool shutdown = false;
 
-void Server::Init(){
-	SetSignal();
-}
+int main(){
+	int child_num = 10;
+	bool child = false;
+	
 
-void Server::SignalHandler(int sig) {
-	switch (sig) {
-	case SIGTERM:
-		shutdown = 1; 
-		break;
-	case SIGINT:
-	     break;
-	case SIGALRM: 
-		 handle_sig_alarm = 1; 
-		 break;
-	case SIGHUP:  
-		 handle_sig_hup = 1; 
-		 break;
-	case SIGCHLD:  
-		 break;
-	}
-}
+	int sockfd; 
+	if( (sockfd = SocketServer()) < 0 )
+		return -1;
 
-void Server::SetSignal(){
-	signal(SIGPIPE, SIG_IGN);
-	signal(SIGUSR1, SIG_IGN);
-	signal(SIGALRM, SignalHandler);
-	signal(SIGTERM, SignalHandler);	//kill发出的终止信号
-	signal(SIGHUP,  SignalHandler);	//重启
-	signal(SIGCHLD, SignalHandler);
-	signal(SIGINT,  SignalHandler);	//终端中断符
-}
-
-int Server::SocketListen(){
-	int sockfd;
-    if( (sockfd = socket(AF_INET, config.SOCK_TREAM, 0)) < 0){
-        perror("socket\n");
-        return -1;
+    epoll_event events[MAX_EVENT_NUMBER];
+    int epollfd;
+    if((epollfd= epoll_create(MAX_EVENT_NUMBER)) < 0){
+        perror("epoll_create");
+        return -1;    
     }
 
-	struct sockaddr_in address;
-	memset(&address, 0, sizeof(address));
-	address.sin_family = AF_INET;
-	inet_pton(AF_INET, config.ip, &address.sin_addr);
-	address.sin_port = htons(config.port);
-
-    if( bind(sockfd, (struct sockaddr*)&address, sizeof(address)) < 0){
-        perror("bind\n");
+    if(Addfd(epollfd, sockfd) < 0){
+        perror("addfd");
         return -1;
     }
+	
+	int pid;
+	if(child_num > 0){
+		while(!child && !shutdown){
+			if(child_num > 0){
+				switch(fork()){
+				case -1:
+					return -1;
+				case 0:
+					child = 1;
+					break;
+				default:
+					-- child_num;
+					break;
+				}
+			}else{
+				int status;
+				if( -1 != wait(&status) ){
+					++ child_num;
+				}else{
+					switch(errno) {
+					case EINTR:
+						break;
+					default:
+						break;
+					}
+				}
+			}
+		}	
 
-	if(listen(sockfd, BACKLOG) < 0){
-        perror("listen\n");
-        return -1;
+		if(!child){
+			return 0;
+		}
 	}
-	return sockfd;
+	
+	int ret = 0;
+	while(!shutdown){
+		if((ret = epoll_wait(epollfd, events, MAX_EVENT_NUMBER, -1)) < 0){
+			perror("epoll wait\n");
+			continue;
+		}else{
+			for(int i = 0; i < ret; ++i){
+				int tmpfd = events[i].data.fd;
+				if(tmpfd == sockfd){
+					struct sockaddr_in client;
+				    socklen_t client_addrlength = sizeof(client);
+					int acceptfd;
+				    if((acceptfd = accept(sockfd, (struct sockaddr*)&client, &client_addrlength)) < 0){
+						perror("accept\n");
+					}else{
+						Addfd(acceptfd);
+					}
+				}else{
+
+				}				
+			}
+		}
+	}
+	return 0;
 }
