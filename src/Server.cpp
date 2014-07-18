@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <iostream>
 #include "Lightlib.h"
+#include "Connection.h"
 using namespace std;
 
 static bool shutdown = false;
@@ -33,7 +34,7 @@ int main(){
         return -1;    
     }
 
-    if(Addfd(epollfd, sockfd) < 0){
+    if(EpollAddfd(epollfd, sockfd) < 0){
         perror("addfd");
         return -1;
     }
@@ -72,6 +73,8 @@ int main(){
 		}
 	}
 	
+
+
 	int ret = 0;
 	while(!shutdown){
 		if((ret = epoll_wait(epollfd, events, MAX_EVENT_NUMBER, -1)) < 0){
@@ -80,6 +83,7 @@ int main(){
 		}else{
 			for(int i = 0; i < ret; ++i){
 				int tmpfd = events[i].data.fd;
+				Connection *tmp_conn = events[i].data.ptr;
 				if(tmpfd == sockfd){
 					struct sockaddr_in client;
 				    socklen_t client_addrlength = sizeof(client);
@@ -87,10 +91,14 @@ int main(){
 				    if((acceptfd = accept(sockfd, (struct sockaddr*)&client, &client_addrlength)) < 0){
 						perror("accept\n");
 					}else{
-						Addfd(acceptfd);
+						Connection *accept_conn = new Connection(acceptfd); 
+						if(EpollAddptr(epollfd, acceptfd, conn) < 0){
+					        perror("addfd");
+					        delete conn;
+					    }
 					}
 				}else{
-
+					tmp_conn.ConnectionStateMachine();
 				}				
 			}
 		}

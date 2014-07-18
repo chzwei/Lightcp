@@ -65,11 +65,35 @@ int SocketServer(){
 	return sockfd;
 }
 
-int Addfd(int epollfd, int fd){
+int EpollAddfd(int epollfd, int fd){
     epoll_event event;
     event.data.fd = fd;
     event.events = EPOLLIN;
     int ret = epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &event);
+    SetNoBlocking(fd);
+    return ret;
+}
+
+int EpollAddRptr(int epollfd, int fd, void *ptr){
+    epoll_event event;
+    event.data.ptr = ptr;
+    event.events = EPOLLIN;
+    int ret = epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &event);
+    SetNoBlocking(fd);
+    return ret;
+}
+
+int EpollAddWptr(int epollfd, int fd, void *ptr){
+    epoll_event event;
+    event.data.ptr = ptr;
+    event.events = EPOLLOUT;
+    int ret = epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &event);
+    SetNoBlocking(fd);
+    return ret;
+}
+
+int EpollDelWptr(int epollfd, int fd){
+    int ret = epoll_ctl(epollfd, EPOLL_CTL_DEL, fd, NULL);
     SetNoBlocking(fd);
     return ret;
 }
