@@ -12,11 +12,13 @@
  */
 #include <stdio.h>
 #include <iostream>
+#include <sys/wait.h>
 #include "Lightlib.h"
 #include "Connection.h"
+#include "Epoll.h"
 using namespace std;
 
-static bool shutdown = false;
+static bool shut_down = false;
 
 int main(){
 	int child_num = 10;
@@ -28,20 +30,15 @@ int main(){
 		return -1;
 
     epoll_event events[MAX_EVENT_NUMBER];
-    int epollfd;
-    if((epollfd= epoll_create(MAX_EVENT_NUMBER)) < 0){
-        perror("epoll_create");
-        return -1;    
-    }
-
-    if(EpollAddfd(epollfd, sockfd) < 0){
+    Epoll *epl = Epoll::GetInstance();
+    if(epl->EpollAddRfd(sockfd) < 0){
         perror("addfd");
         return -1;
     }
 	
 	int pid;
 	if(child_num > 0){
-		while(!child && !shutdown){
+		while(!child && !shut_down){
 			if(child_num > 0){
 				switch(fork()){
 				case -1:
@@ -76,14 +73,14 @@ int main(){
 
 
 	int ret = 0;
-	while(!shutdown){
-		if((ret = epoll_wait(epollfd, events, MAX_EVENT_NUMBER, -1)) < 0){
+	while(!shut_down){
+		if((ret = epl->EpollWait(events, MAX_EVENT_NUMBER, -1)) < 0){
 			perror("epoll wait\n");
 			continue;
 		}else{
 			for(int i = 0; i < ret; ++i){
 				int tmpfd = events[i].data.fd;
-				Connection *tmp_conn = events[i].data.ptr;
+				Connection *tmp_conn = (Connection*)events[i].data.ptr;
 				if(tmpfd == sockfd){
 					struct sockaddr_in client;
 				    socklen_t client_addrlength = sizeof(client);
@@ -92,13 +89,13 @@ int main(){
 						perror("accept\n");
 					}else{
 						Connection *accept_conn = new Connection(acceptfd); 
-						if(EpollAddptr(epollfd, acceptfd, conn) < 0){
+						if(epl->EpollAddRptr(acceptfd, accept_conn) < 0){
 					        perror("addfd");
-					        delete conn;
+					        delete accept_conn;
 					    }
 					}
 				}else{
-					tmp_conn.ConnectionStateMachine();
+					tmp_conn->ConnectionStateMachine();
 				}				
 			}
 		}

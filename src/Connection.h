@@ -15,6 +15,7 @@
 
 #include <sys/socket.h>
 #include <stdlib.h>
+#include "Epoll.h"
 
 enum ConnectionState{
 	CONNET,
@@ -36,7 +37,9 @@ struct ConnectionHead{
 
 class Connection{
 public:
-	Connection(int accept_fd):fd(accept_fd){}
+	Connection(int accept_fd):fd(accept_fd){
+		epl = Epoll::GetInstance();
+	}
 
 	void SetState(ConnectionState state){
 		conn_stat = state;
@@ -132,7 +135,7 @@ public:
 		memcpy(head_buf+4, &conn_head.len, 4);
 		data_left_size = conn_head.len;
 		data_offset = 0;
-		if(EpollAddWptr(epollfd, fd, this) < 0){
+		if(epl->EpollAddWptr(fd, this) < 0){
 			return;
 		}else{
 			SetState(WRITE_HEAD);
@@ -140,7 +143,7 @@ public:
 	}
 
 	void WriteHead(){
-		int send_size = sendto(fd, head_buf+8-head_left_size, head_left_size, 0);
+		int send_size = send(fd, head_buf+8-head_left_size, head_left_size, 0);
 		if(send_size >= 0){
 			head_left_size -= send_size;
 			if(head_left_size == 0){
@@ -159,7 +162,7 @@ public:
 	}
 
 	void WriteData(){
-		int send_size = sendto(fd, data_buf+data_offset, data_left_size, 0);
+		int send_size = send(fd, data_buf+data_offset, data_left_size, 0);
 		if(send_size >= 0){
 			data_left_size -= send_size;
 			if(data_left_size == 0){
@@ -177,7 +180,7 @@ public:
 	}
 
 	void WriteEnd(){
-		if(EpollDelWptr(epollfd, fd) < 0){
+		if(epl->EpollDel(fd) < 0){
 			return;
 		}else{
 			SetState(WRITE_HEAD);
@@ -193,6 +196,7 @@ private:
 	int data_offset;
 	int data_left_size;
 	int fd;
+	Epoll *epl;
 };
 
 #endif
