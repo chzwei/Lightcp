@@ -9,12 +9,13 @@ ObjectChunk<T>::ObjectChunk(){
 	previous = NULL;
 	next = NULL;
 
-	obj_size = 1000;
-	free_size = obj_size;
+	obj_size = sizeof(T);
+	obj_count = 1000;
+	free_count = obj_count;
 	free_index = 0;
-	p_obj = new T[obj_size];
-	free_array = new bool[obj_size];
-	memset(free_array, true, obj_size);
+	p_obj = new T[obj_count];
+	free_array = new bool[obj_count];
+	memset(free_array, true, obj_count);
 }
 
 template<typename T>
@@ -23,12 +24,13 @@ ObjectChunk<T>::ObjectChunk(int size){
 	previous = NULL;
 	next = NULL;
 
-	obj_size = size;
-	free_size = obj_size;
+	obj_size = sizeof(T);
+	obj_count = size;
+	free_count = obj_count;
 	free_index = 0;
-	p_obj = new T[obj_size];
-	free_array = new bool[obj_size];
-	memset(free_array, true, obj_size);
+	p_obj = new T[obj_count];
+	free_array = new bool[obj_count];
+	memset(free_array, true, obj_count);
 }
 
 template<typename T>
@@ -42,7 +44,7 @@ T* ObjectChunk<T>::NewObject(){
 	if(free_size == 0)
 		return NULL;
 	while(1){
-		free_index = (free_index +1) % obj_size;
+		free_index = (free_index +1) % obj_count;
 		if(free_array[free_index]){
 			free_array[free_index] = false;
 			free_size --;
@@ -55,8 +57,7 @@ template<typename T>
 bool ObjectChunk<T>::DeleteObject(T *obj){
 	int obj_addr = (int)obj;	
 	int p_obj_addr = (int)p_obj;
-	int obj_index = obj_addr - p_obj_addr;
-	obj_index /= sizeof(T);
+	int obj_index = (obj_addr - p_obj_addr)/obj_size;
 	free_array[obj_index] = true;
 	free_size ++;
 	return true;
@@ -66,10 +67,12 @@ template<typename T>
 bool ObjectChunk<T>::IsInchunk(T *obj){
 	int obj_addr = (int)obj;
 	int p_obj_addr = (int)p_obj;
-	int obj_index = obj_addr - p_obj_addr;
-	if(obj_index % sizeof(T)) false;
-	obj_index /= sizeof(T);
-	if(obj_index >= 0 && obj_index < obj_size){
+
+	if( (obj_addr - p_obj_addr) % obj_size ) 
+		return false;
+	
+	int obj_index = (obj_addr - p_obj_addr)/obj_size;
+	if(obj_index >= 0 && obj_index < obj_count){
 		return true;
 	}
 	return false;	
@@ -77,23 +80,27 @@ bool ObjectChunk<T>::IsInchunk(T *obj){
 
 template<typename T>
 bool ObjectChunk<T>::IsFull(){
-	return free_size == 0;
+	return free_count == 0;
 }
 
 template<typename T>
 bool ObjectChunk<T>::IsEmpty(){
-	return obj_size == free_size;
+	return free_count == obj_count;
 }
 
 template<typename T>
 ObjectPool<T>::ObjectPool(){
-	this->chunk_size = 1000;
+	chunk_size = 1000;
+	total_obj_count = chunk_size;
+	new_obj_count = 0;
 	head = new ObjectChunk<T>();
 }
 
 template<typename T>
-ObjectPool<T>::ObjectPool(int chunk_size){
-	this->chunk_size = 10000;
+ObjectPool<T>::ObjectPool(int size){
+	chunk_size = size;
+	total_obj_count = chunk_size;
+	new_obj_count = 0;
 	head = new ObjectChunk<T>();
 }
 
@@ -109,36 +116,55 @@ ObjectPool<T>::~ObjectPool(){
 }
 
 template<typename T>
-T* ObjectPool<T>::new_object(){
+T* ObjectPool<T>::NewObject(){
 	ObjectChunk<T> *tmp = head;
 	while(tmp->next != NULL){
-		if(!tmp->isfull()){
-			return tmp->new_object();
+		if(!tmp->IsFull()){
+			++ new_obj_count;
+			return tmp->NewObject();
 		}
 		tmp = tmp->next;
 	}
-	if(tmp->isfull()){
-		ObjectChunk<T> *tmp_obj = new ObjectChunk<T>();
-		tmp->next = tmp_obj;
-		tmp = tmp_obj;
+	if(tmp->IsFull()){
+		ObjectChunk<T> *tmp_chunk = new ObjectChunk<T>();
+		total_obj_count += chunk_size;
+		tmp->next = tmp_chunk;
+		tmp = tmp_chunk;
 	}
-	return tmp->new_object();
+	++ new_obj_count;
+	return tmp->NewObject();
 }
 
 template<typename T>
-bool ObjectPool<T>::delete_object(T *obj){
+bool ObjectPool<T>::DeleteObject(T *obj){
 	ObjectChunk<T> *tmp = head;
-	while(tmp->next != NULL) {
-	    if(tmp->is_inchunk(obj)){
-	    	tmp->delete_object(obj);
+	while(tmp != NULL) {
+	    if(tmp->IsInchunk(obj)){
+	    	tmp->DeleteObject(obj);
+	    	-- new_obj_count;
+	    	if(new_obj_count*2 < total_obj_count){
+				ClearChunck();
+			}
 	    	return true;
 	    }
 	    tmp = tmp->next;
 	}
-	if(tmp->is_inchunk(obj)){
-		tmp->delete_object(obj);
-		return true;
-	}else{
-		return false;
+	return false;
+}
+
+template<typename T>
+void ObjectPool<T>::ClearChunck(){
+	ObjectChunk<T> *tmp = head;
+	ObjectChunk<T> *del = NULL;
+	while(tmp != NULL) {
+	    if(tmp->IsEmpty()){
+	    	del = tmp;
+	    	tmp = tmp->next;
+	    	delete del;
+	    	del = NULL;
+	    	total_obj_count -= chunk_size;
+	    }else{
+	    	tmp = tmp->next;	
+	    }
 	}
 }
