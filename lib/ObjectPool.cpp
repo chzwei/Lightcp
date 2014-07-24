@@ -9,7 +9,7 @@ ObjectChunk<T>::ObjectChunk(){
 	previous = NULL;
 	next = NULL;
 
-	obj_size = 10000;
+	obj_size = 1000;
 	free_size = obj_size;
 	free_index = 0;
 	p_obj = new T[obj_size];
@@ -19,6 +19,10 @@ ObjectChunk<T>::ObjectChunk(){
 
 template<typename T>
 ObjectChunk<T>::ObjectChunk(int size){
+
+	previous = NULL;
+	next = NULL;
+
 	obj_size = size;
 	free_size = obj_size;
 	free_index = 0;
@@ -29,53 +33,41 @@ ObjectChunk<T>::ObjectChunk(int size){
 
 template<typename T>
 ObjectChunk<T>::~ObjectChunk(){
-	delete [] this->p_obj;
-	delete [] this->free_array;
+	delete [] p_obj;
+	delete [] free_array;
 }
 
 template<typename T>
-T* ObjectChunk<T>::new_object(){
+T* ObjectChunk<T>::NewObject(){
+	if(free_size == 0)
+		return NULL;
 	while(1){
 		free_index = (free_index +1) % obj_size;
 		if(free_array[free_index]){
 			free_array[free_index] = false;
-//			free_size --;
-//			printf("new %d %d\n", (int)&this->p_obj[i], i);
+			free_size --;
 			return &this->p_obj[free_index];
 		}
 	}
-	return NULL;
 }
 
 template<typename T>
-bool ObjectChunk<T>::delete_object(T *obj){
+bool ObjectChunk<T>::DeleteObject(T *obj){
 	int obj_addr = (int)obj;	
-//	printf("del %d\n", obj_addr);
 	int p_obj_addr = (int)p_obj;
 	int obj_index = obj_addr - p_obj_addr;
-	
-//	if(obj_index % sizeof(T)){
-//		return false;
-//	}
-
 	obj_index /= sizeof(T);
-//	if(obj_index >= 0 && obj_index < obj_size){
-//		printf("del index %d\n", obj_index);
-		free_array[obj_index] = true;
-//		free_size ++;
-		return true;
-//	}
-//	return false;
+	free_array[obj_index] = true;
+	free_size ++;
+	return true;
 }
 
 template<typename T>
-bool ObjectChunk<T>::is_inchunk(T *obj){
+bool ObjectChunk<T>::IsInchunk(T *obj){
 	int obj_addr = (int)obj;
 	int p_obj_addr = (int)p_obj;
 	int obj_index = obj_addr - p_obj_addr;
-	
 	if(obj_index % sizeof(T)) false;
-
 	obj_index /= sizeof(T);
 	if(obj_index >= 0 && obj_index < obj_size){
 		return true;
@@ -84,12 +76,12 @@ bool ObjectChunk<T>::is_inchunk(T *obj){
 }
 
 template<typename T>
-bool ObjectChunk<T>::isfull(){
+bool ObjectChunk<T>::IsFull(){
 	return free_size == 0;
 }
 
 template<typename T>
-bool ObjectChunk<T>::isempty(){
+bool ObjectChunk<T>::IsEmpty(){
 	return obj_size == free_size;
 }
 
