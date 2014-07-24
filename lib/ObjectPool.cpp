@@ -41,13 +41,13 @@ ObjectChunk<T>::~ObjectChunk(){
 
 template<typename T>
 T* ObjectChunk<T>::NewObject(){
-	if(free_size == 0)
+	if(free_count == 0)
 		return NULL;
 	while(1){
 		free_index = (free_index +1) % obj_count;
 		if(free_array[free_index]){
 			free_array[free_index] = false;
-			free_size --;
+			free_count --;
 			return &this->p_obj[free_index];
 		}
 	}
@@ -59,7 +59,7 @@ bool ObjectChunk<T>::DeleteObject(T *obj){
 	int p_obj_addr = (int)p_obj;
 	int obj_index = (obj_addr - p_obj_addr)/obj_size;
 	free_array[obj_index] = true;
-	free_size ++;
+	free_count ++;
 	return true;
 }
 
@@ -155,16 +155,25 @@ bool ObjectPool<T>::DeleteObject(T *obj){
 template<typename T>
 void ObjectPool<T>::ClearChunck(){
 	ObjectChunk<T> *tmp = head;
+	ObjectChunk<T> *tmp_next = head->next;
 	ObjectChunk<T> *del = NULL;
-	while(tmp != NULL) {
-	    if(tmp->IsEmpty()){
-	    	del = tmp;
-	    	tmp = tmp->next;
+
+	while(tmp_next != NULL) {
+	    if(tmp_next->IsEmpty()){
+	    	del = tmp_next;
+	    	tmp_next = tmp_next->next;
+			tmp->next = tmp_next;
 	    	delete del;
 	    	del = NULL;
-	    	total_obj_count -= chunk_size;
+			total_obj_count -= chunk_size;
 	    }else{
-	    	tmp = tmp->next;	
+	    	tmp = tmp_next;
+			tmp_next = tmp_next->next;
 	    }
 	}
+}
+
+template<typename T>
+void ObjectPool<T>::ShowCount(){
+	printf("used: %d \t total: %d\n", new_obj_count, total_obj_count);
 }
