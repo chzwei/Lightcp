@@ -35,6 +35,7 @@ public:
 	~ObjectPool();
 	T* NewObject();
 	bool DeleteObject(T *obj);
+	void ShowCount();
 
 private:
 	ObjectChunk<T> *head;
